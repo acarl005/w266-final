@@ -5,13 +5,13 @@ from bs4 import NavigableString
 from main import parse
 
 patterns = [
+    ("multilogue1", r"^<b>([\w\s#\-/'\.]+)</b>\s+and\s+<b>([\w\s]+)</b>:\s*(.*)$"), # two speakers (colon outside <b>)
+    ("multilogue2", r"^<b>([\w\s#\-/'\.]+)</b>\s+and\s+<b>([\w\s]+):</b>\s*(.*)$"), # two speakers (colon inside <b>)
     ("dialogue1", r"^<b>([\w\s#\-/'\.]+):\s*</b>\s*(.*)$"), # standard (colon inside <b>)
     ("dialogue2", r"^<b>([\w\s#\-/'\.]+)</b>\s*:\s*(.*)$"), # standard (colon outside <b>)
     ("dialogue2", r"^<b>([\w\s#\-/'\.]+)</b>\s*<b>:</b>\s*(.*)$"), # <b> around the name and another around the colon
     ("dialogue3", r"^([\w\s#\-/'\.]+)\s*:\s*(.*)$"), # no bold tags
     ("dialogue4", r"^<b>([\w\s#\-/'\.]+)</b>\s+(.*)$"), # no colon
-    ("multilogue1", r"^<b>([\w\s#\-/'\.]+)</b>\s+and\s+<b>([\w\s]+)</b>:\s*(.*)$"), # two speakers (colon outside <b>)
-    ("multilogue2", r"^<b>([\w\s#\-/'\.]+)</b>\s+and\s+<b>([\w\s]+):</b>\s*(.*)$"), # two speakers (colon inside <b>)
     ("blank", r"^\s*$"),
     ("act1", r"<u><b>Act I+\s*</b></u>"),
     ("act2", r"<b><u>Act I+\s*</u></b>"),
@@ -106,7 +106,7 @@ def html_page_to_structured(html_page, key):
         found_match = False
         for kind, regex in patterns:
             match = re.match(regex, line)
-            if match:
+            if match and not found_match:
                 found_match = True
                 if "dialogue" in kind:
                     speaker = match[1].strip()
@@ -121,7 +121,6 @@ def html_page_to_structured(html_page, key):
                 elif kind == "credits":
                     return data
                 else:
-                    # print(kind)
                     pass
         # these lines had an error where it was separated from its previous line of dialog
         if line in split_dialogue:
