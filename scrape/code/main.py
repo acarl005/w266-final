@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 import os
 import csv
+from tqdm import tqdm
 
 code_dirname = os.path.dirname(__file__)
 
@@ -11,7 +12,7 @@ async def http_get(session, url):
     async with sem:
         print(f"getting {url}")
         async with session.get(url) as resp:
-            text = await resp.text()
+            text = await resp.text(encoding="ISO-8859-1")
             print(f"got page {url}. status: {resp.status} length: {len(text)}")
             return text
 
@@ -25,7 +26,6 @@ async def download(dirname, home_url, get_script_urls, url_to_key):
 
         home_html = await http_get(session, home_url)
         urls = get_script_urls(home_html)
-        print(urls)
         pages = await asyncio.gather(*[http_get(session, url) for url in urls])
         for url, page in zip(urls, pages):
             key = url_to_key(url)
@@ -40,7 +40,7 @@ def parse(dirname, html_page_to_structured):
     if not os.path.exists(parsed_data_dirname):
         os.makedirs(parsed_data_dirname)
     files = os.listdir(raw_data_dirname)
-    for filename in files:
+    for filename in tqdm(files):
         file_stem, _ = os.path.splitext(filename)
         with open(os.path.join(raw_data_dirname, filename)) as f:
             html = f.read()
