@@ -1,3 +1,5 @@
 __pycache__/
 .ipynb_checkpoints/
 embeddings/*.vectors*
+analysis/*-ckpt/
+analysis/*-board/
