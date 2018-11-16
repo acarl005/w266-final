@@ -1,63 +1,100 @@
-class neuralbow():
-    def __init__(self, embeddings, num_classes, learning_rate=0.001):
-        self.embeddings = embeddings
-        self.num_classes = num_classes
-        self.learning_rate = learning_rate
-        self.create_inputs()
-        self.create_graph()
+import tensorflow as tf
 
-    def create_inputs(self):
-        self.X = tf.placeholder(dtype=tf.string, name="X", shape=[None])
-        self.Y = tf.placeholder(dtype=tf.int64, name="Y", shape=[None])
-        self.keep_prob = tf.placeholder_with_default(1., shape=[], name="keep_prob")
+def embedding_layer(ids_, V, embed_dim, init_scale=0.001):
+    W_embed_ = tf_get_variable("W_embed",
+                               (V, embed_dim),
+                               initializer = tf.random_uniform_initializer(-init_scale, init_scale))
+    xs_ = tf.nn.embedding_lookup(W_embed_, ids_)
+    return xs_
 
-    def create_graph(self):
-        sparse_text = tf.string_split(self.X, " ")
-        lookup_table = tf.contrib.lookup.index_table_from_tensor(
-                mapping=tf.constant(list(self.embeddings.vocab.keys())),
-                num_oov_buckets=1)
+def fully_connected_layers(h0_, hidden_dims, activation=tf.tanh,
+                           dropout_rate=0, is_training=False):
+    h_ = h0_
+    for i, hdim in enumerate(hidden_dims):
+        h_ = tf.layers.dense(h_, hdim, activation=activation, name=("Hidden_%d"%i))
+        if dropout_rate > 0:
+            h_ = tf.layers.dropout(h_,
+                                   rate=dropout_rate,
+                                   training=is_training,
+                                   name=("Hidden_dropout_%d"%i))
+    return h_
 
-        ids_sparse = lookup_table.lookup(sparse_text)
-        ids = tf.sparse_tensor_to_dense(ids_sparse, default_value=len(self.embeddings.vocab))
+def softmax_output_layer(h_, labels_, num_classes):
+    with tf.variable_scope("Logits"):
+        logits_ = None
+        W_out_ = tf.get_variable("W_out", (h_.shape[1], num_classes), initializer=tf.random_normal_initializer())
+        b_out_ = tf.get_variable("b_out", (num_classes, ), initializer=tf.zeros_initializer())
+        logits_ = tf.matmul(h_, W_out_) + b_out
+        
+    if labels_ is None:
+        return None, logits_
+    
+    with tf.name_scope("Softmax"):
+        loss_ = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels_, logits=logits_))
+        
+    return loss_, logits_
 
-        embed_dim = self.embeddings.vector_size
+def BOW_encoder(ids_, ns_, V, embed_dim, hidden_dims, dropout_rate=0,
+                is_training=None,
+                **unused_kw):
+    assert is_training is not None, "is_training must be explicitly set to True or False"
+    with tf.variable_scope("Embedding_Layer"):
+        xs_ = embedding_layer(ids_, V, embed_dim)
+        
+    mask_ = tf.expand_dims(tf.sequence_mask(ns_, xs_.shape[1], dtype=tf.float32), -1)
+    xs_mask_ = xs_*mask_
+    xs_sum_ = tf.reduce_sum(xs_mask_, 1)
+    h_ = fully_connected_layers(xs_sum_, hidden_dims, dropout_rate=dropout_rate, is_training=is_training)
+    return h_, xs_
 
-        embedding = tf.Variable(
-                np.vstack((self.embeddings.vectors, np.zeros(embed_dim))),
-                trainable=False,
-                dtype=tf.float32)
-        embedded = tf.nn.embedding_lookup(embedding, ids)
-
-        embedded = tf.expand_dims(embedded, 3)
-
-        conv2 = tf.layers.conv2d(embedded, filters=2, kernel_size=(2, embed_dim), activation=tf.nn.relu)
-        conv2_squeezed = tf.squeeze(conv2, axis=-2)
-        max_pooled2 = tf.reduce_max(conv2_squeezed, axis=-2, name="max_pool2")
-
-        conv3 = tf.layers.conv2d(embedded, filters=2, kernel_size=(3, embed_dim), activation=tf.nn.relu)
-        conv3_squeezed = tf.squeeze(conv3, axis=-2)
-        max_pooled3 = tf.reduce_max(conv3_squeezed, axis=-2, name="max_pool3")
-
-        conv4 = tf.layers.conv2d(embedded, filters=2, kernel_size=(4, embed_dim), activation=tf.nn.relu)
-        conv4_squeezed = tf.squeeze(conv4, axis=-2)
-        max_pooled4 = tf.reduce_max(conv4_squeezed, axis=-2, name="max_pool4")
-
-        max_pooled = tf.concat((max_pooled2, max_pooled3, max_pooled4), axis=1)
-        dropped_out = tf.nn.dropout(max_pooled, keep_prob=self.keep_prob)
-
-        logits = tf.layers.dense(dropped_out, units=self.num_classes, name="final_dense")
-        predictions = tf.argmax(logits, axis=1, name="argmax")
-
-        self.logits = logits
-
-        losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.logits, labels=self.Y)
-        loss = tf.reduce_mean(losses)
-        tf.summary.scalar("loss", loss)
-
-        opt = tf.train.AdamOptimizer(self.learning_rate)
-        self.train_op = opt.minimize(loss, global_step=tf.train.get_global_step())
-
-        self.accuracy = tf.reduce_mean(tf.cast(tf.equal(self.Y, predictions), tf.float32))
-        tf.summary.scalar("accuracy", self.accuracy)
-
-        self.merged_summary = tf.summary.merge_all()
+def classifier_model_fn(features, labels, mode, params):
+    tf.set_random_seed(params.get('rseed', 10))
+    is_training = (mode == tf.estimator.ModeKeys.TRAIN)
+    if params['encoder_type'] == 'bow':
+        with tf.variable_scope("Encoder"):
+            h_, xs_ = BOW_encoder(features['ids'], features['ns'],
+                                  is_training=is_training,
+                                  **params)
+    else:
+        raise ValueError("Error: unsupported enocder type"
+                         "'{:s}'".format(params['encoder_type']))
+        
+    with tf.variable_scope("Output_Layer"):
+        ce_loss_, logits_ = softmax_output_layer(h_, labels, params['num_classes'])
+        
+    with tf.name_scope("Prediction"):
+        pred_proba_ = tf.nn.softmax(logits_, name="pred_proba")
+        pred_max_ = tf.argmax(logits_, 1, name="pred_max")
+        predictions_dict = {"proba": pred_proba_, "max": pred_max_}
+        
+    if mode == tf.estimator.ModeKeys.PREDICT:
+        return tf.estimator.EstimatorSpec(mode=mode, predictions=predictions_dict)
+    
+    
+    with tf.variable_scope("Regularization"):
+        l2_penalty_ = tf.nn.l2_loss(xs_)
+        for var_ in tf.trainable_variables():
+            if "Embedding_Layer" in var_.name:
+                continue
+            l2_penalty_ += tf.nn.l2_loss(var_)
+        l2_penalty *= params['beta']
+        tf.summary.scalar("l2_penalty", l2_penalty_)
+        regularized_loss_ = ce_loss_ + l2_penalty_
+        
+        
+    with tf.variable_scope("Training"):
+        if params['optimizer'] == 'adagrad':
+            optimizer_ = tf.train.AdagradOptimizer(params['lr'])
+        else:
+            optimizer_ = tf.train.GradientDescentOptimizer(params['lr'])
+        train_op_ = optimizer_.minimize(regularized_loss_, global_step = tf.train.get_global_step())
+        
+    tf.summary.scalar("cross_entropy_loss", ce_loss_)
+    eval_metrics = {"cross_entropy_loss": tf.metrics.mean(ce_loss_),
+                    "accuracy": tf.metrics.accuracy(labels, pred_max_)}
+    
+    return tf.estimator.EstimatorSpec(mode=mode,
+                                      predictions=predictions_dict,
+                                      loss=regularized_loss_,
+                                      train_op=train_op_,
+                                      eval_metric_ops=eval_metrics)
