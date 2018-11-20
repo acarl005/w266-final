@@ -12,3 +12,8 @@ RUN pip install gensim \
 # docker image rm _____ <- insert IMAGE IDs that you want to remove
 # docker ps -a
 # docker rm _____ <- insert CONTAINER IDs that you want to remove
+
+# Sources/References
+# Jupyter Docker Stacks: https://jupyter-docker-stacks.readthedocs.io/en/latest/index.html
+# jupyter/tensorflow-notebook info: https://jupyter-docker-stacks.readthedocs.io/en/latest/using/selecting.html
+# Docker Hub image tags: https://hub.docker.com/r/jupyter/tensorflow-notebook/tags/
