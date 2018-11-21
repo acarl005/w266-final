@@ -3,7 +3,8 @@ FROM jupyter/tensorflow-notebook:e8613d84128b
 EXPOSE 6006
 
 RUN pip install gensim \
-                nltk
+                nltk \
+                graphviz
 
 # Execute the following commands within the base directory of the repository to build and run the environment
 # docker build -t w266/final:1.0 .
