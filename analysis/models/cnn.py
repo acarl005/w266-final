@@ -22,6 +22,7 @@ class CNN():
 
         ids_sparse = lookup_table.lookup(sparse_text)
         ids = tf.sparse_tensor_to_dense(ids_sparse, default_value=len(self.embeddings.vocab))
+        self.ids = ids
 
         embed_dim = self.embeddings.vector_size
 
@@ -34,15 +35,15 @@ class CNN():
 
         embedded = tf.expand_dims(embedded, 3)
 
-        conv2 = tf.layers.conv2d(embedded, filters=15, kernel_size=(2, embed_dim), activation=tf.nn.relu)
+        conv2 = tf.layers.conv2d(embedded, filters=10, kernel_size=(2, embed_dim), activation=tf.nn.relu)
         conv2_squeezed = tf.squeeze(conv2, axis=-2)
         max_pooled2 = tf.reduce_max(conv2_squeezed, axis=-2, name="max_pool2")
 
-        conv3 = tf.layers.conv2d(embedded, filters=15, kernel_size=(3, embed_dim), activation=tf.nn.relu)
+        conv3 = tf.layers.conv2d(embedded, filters=10, kernel_size=(3, embed_dim), activation=tf.nn.relu)
         conv3_squeezed = tf.squeeze(conv3, axis=-2)
         max_pooled3 = tf.reduce_max(conv3_squeezed, axis=-2, name="max_pool3")
 
-        conv4 = tf.layers.conv2d(embedded, filters=15, kernel_size=(4, embed_dim), activation=tf.nn.relu)
+        conv4 = tf.layers.conv2d(embedded, filters=10, kernel_size=(4, embed_dim), activation=tf.nn.relu)
         conv4_squeezed = tf.squeeze(conv4, axis=-2)
         max_pooled4 = tf.reduce_max(conv4_squeezed, axis=-2, name="max_pool4")
 
