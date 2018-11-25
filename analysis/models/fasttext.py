@@ -38,6 +38,7 @@ class FastText():
             tf.trainable_variables(scope="dense/"))
 
         predictions = tf.cast(tf.argmax(logits, axis=-1), tf.int32)
+        self.predictions = predictions
         self.probs = tf.nn.softmax(logits)
 
         loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=self.Y, logits=logits))
