@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+import seaborn as sn
 
 def shuffle(x, y):
     m = x.shape[0]
