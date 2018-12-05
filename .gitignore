@@ -3,3 +3,4 @@ __pycache__/
 embeddings/*.vectors*
 analysis/*-ckpt/
 analysis/*-board/
+analysis/datasets/*
